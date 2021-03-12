@@ -34,6 +34,8 @@
 #define val_Length  4
 #define ret_Length  1
 
+#define ret_cmd_complete_pin  9
+
 #define cmd_digitalWrite      10
 #define cmd_digitalRead       11
 #define cmd_getPinMode        12
@@ -45,13 +47,6 @@
 #define cmd_getEncoderDir     18
 #define cmd_getSerialInfo     19
 #define cmd_getSysStatus      20
-
-// Function Prototypes
-void exec_digitalWrite(int loc, int pin);
-void exec_digitalRead(int pin);
-void getDioMode(int pin);
-void exec_analogRead(int pin);
-void exec_pwm(int pin, int value);
 
 // ****** Variables ******
 const int numChar = 10;             // number of characters we want.
@@ -95,10 +90,7 @@ void setup()
   pinMode(13, OUTPUT);
 
   // Debugging
-  int num1=97;
-  char yo = num1;
-  char myCharArr[5]={yo,'8','7','9','\0'};
-  Serial.println(myCharArr);
+
 }
 
 void loop()
@@ -238,7 +230,7 @@ void executeCommand()
         break;
 
       case cmd_getPinMode:
-        // command function
+        getDioMode(pin_type, loc);
         break;
 
       case cmd_analogRead:
@@ -256,6 +248,12 @@ void executeCommand()
       default:
         break;
     }
+  }
+
+  if (ret==ret_cmd_complete_pin)
+  {
+    // RETURN ID ID loc loc sign 8888 9
+    returnCmdFinishedPing();
   }
 
   readyToExecuteCmd = false;  // After executing a command, we have to wait until we're ready to execute again
@@ -301,19 +299,18 @@ bool is_pin_valid(int pinType, int pin)
 void exec_digitalWrite(int pin, int value) {
   if (value < 0 || value > 1) value = 0;
   digitalWrite(pin, value);
-  //Serial.println(
 }
 
 void exec_digitalRead(int pin) {
   Serial.println(digitalRead(pin));
 }
 
-//void getDioMode(int pin) {
-//  if(pinType==DI || pinType==AI) Serial.println("INPUT");
-//  else if(pinType==DO) Serial.println("OUTPUT");
-//  else if(pinType==AO) Serial.println("PWM OUTPUT");
-//  else if(pinType==AO && pin==ardServoPin) Serial.println("Servo PWM OUTPUT");
-//}
+void getDioMode(int pinType, int pin) {
+  if(pinType==DI || pinType==AI) Serial.println("INPUT");
+  else if(pinType==DO) Serial.println("OUTPUT");
+  else if(pinType==AO) Serial.println("PWM OUTPUT");
+  else if(pinType==AO && pin==ardServoPin) Serial.println("Servo PWM OUTPUT");
+}
 
 void exec_analogRead(int pin) {
   switch (pin)
@@ -346,4 +343,28 @@ void exec_pwm(int pin, int value) {
   if (value > 100) value = 100;
   value = map(value, 0, 100, 0, 255);
   analogWrite(pin, value);
+}
+
+void returnCmdFinishedPing()
+{
+  Serial.print(ID);
+
+  // Check if loc starts with 0, ex. 08
+  // if it is then add a zero
+  if(loc < 10)
+  {
+    Serial.print(0);
+    Serial.print(loc);
+  }
+  else
+  {
+    Serial.print(loc);
+  }
+  
+  Serial.print(sign);
+  Serial.print(8888);
+  Serial.println(ret);
+
+  // reset ret so it doesn't spam the ping after being sent once
+  ret = -1;
 }
