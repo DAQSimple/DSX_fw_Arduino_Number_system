@@ -34,17 +34,17 @@
 #define val_Length  4
 #define ret_Length  1
 
-#define cmd_digitalWrite      0
-#define cmd_digitalRead       1
-#define cmd_getPinMode        2
-#define cmd_analogRead        3
-#define cmd_pwmWrite          4
-#define cmd_setPWMFreq        5
-#define cmd_servo             6
-#define cmd_getEncoderSpeed   7
-#define cmd_getEncoderDir     8
-#define cmd_getSerialInfo     9
-#define cmd_getSysStatus      10
+#define cmd_digitalWrite      10
+#define cmd_digitalRead       11
+#define cmd_getPinMode        12
+#define cmd_analogRead        13
+#define cmd_pwmWrite          14
+#define cmd_setPWMFreq        15
+#define cmd_servo             16
+#define cmd_getEncoderSpeed   17
+#define cmd_getEncoderDir     18
+#define cmd_getSerialInfo     19
+#define cmd_getSysStatus      20
 
 // Function Prototypes
 void exec_digitalWrite(int loc, int pin);
@@ -93,6 +93,12 @@ void setup()
   pinMode(9, OUTPUT);
   pinMode(12, OUTPUT);
   pinMode(13, OUTPUT);
+
+  // Debugging
+  int num1=97;
+  char yo = num1;
+  char myCharArr[5]={yo,'8','7','9','\0'};
+  Serial.println(myCharArr);
 }
 
 void loop()
@@ -267,34 +273,35 @@ bool is_pin_valid(int pinType, int pin)
       if (pin == ardDioInPins[i]) valid_pin = true;
   }
 
-  // check if loc matches one of these digital output pins
+  // check if pin matches one of these digital output pins
   else if (pinType == DO)
   {
     for (i = 0 ; i < sizeof(ardDioOutPins) ; ++i)
       if (pin == ardDioOutPins[i]) valid_pin = true;
   }
 
-  // check if loc matches one of these pwm output pins
+  // check if pin matches one of these pwm output pins
   else if (pinType == AO)
   {
     for (i = 0 ; i < sizeof(ardPwmPins) ; ++i)
       if (pin == ardPwmPins[i]) valid_pin = true;
   }
 
-  // check if loc matches one of these analog input pins
+  // check if pin matches one of these analog input pins
   else if (pinType == AI)
   {
     for (i = 0 ; i < sizeof(ardAnalogPins) ; ++i)
       if (pin == ardAnalogPins[i]) valid_pin = true;
   }
 
-  // return if pin is valid (true or false)
+  // return whether or not pin is valid (true or false)
   return valid_pin;
 }
 
 void exec_digitalWrite(int pin, int value) {
   if (value < 0 || value > 1) value = 0;
   digitalWrite(pin, value);
+  //Serial.println(
 }
 
 void exec_digitalRead(int pin) {
