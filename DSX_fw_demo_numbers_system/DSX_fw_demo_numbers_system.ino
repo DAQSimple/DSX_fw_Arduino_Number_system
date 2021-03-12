@@ -191,11 +191,11 @@ void separateCommand()
     ret = atoi(tmpret);
 
     /* DEBUGGING */
-    Serial.println(ID);
-    Serial.println(loc);
-    Serial.println(sign);
-    Serial.println(val);
-    Serial.println(ret);
+//    Serial.println(ID);
+//    Serial.println(loc);
+//    Serial.println(sign);
+//    Serial.println(val);
+//    Serial.println(ret);
 
     newDataIsAvailable = false;
 
