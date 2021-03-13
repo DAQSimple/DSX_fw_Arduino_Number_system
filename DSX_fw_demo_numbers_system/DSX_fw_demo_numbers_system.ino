@@ -17,6 +17,11 @@
 // defines to make extracting information from the Buffer more readable
 // These defines are indexes for reading the Buffer
 // For reference: BUFFER[numChar] = {0,1,2,3,4,5,6,7,8,9}   <- These numbers are indexes
+
+
+#include <Servo.h>
+
+
 #define ID_START    0
 #define ID_END      1
 #define loc_START   2
@@ -54,14 +59,14 @@ char Buffer[numChar];               // Buffer to hold characters or number comma
 char endMarker = '\n';              // Our personal endMarker or terminating character. We can change this.
 bool newDataIsAvailable = false;    // bool variable so we know if new data is available to start executing commands.
 bool readyToExecuteCmd = false;     // bool variable so we know if we can start executing a command
-int pin_type;
+int pin_type;                       // holds the pin type such as digital input, digital output, etc.
 
 typedef enum
 {
-  DI, // digital input
-  DO, // digital output
-  AI, // analog input via 10 bit adc on arduino
-  AO // pwm
+  DIn,    // digital input
+  DOut,   // digital output
+  AIn,    // analog input
+  AOut    // pwm analog output
 } pinType;
 
 unsigned char encoderChA = 2;       // encoder pin channel A
@@ -73,6 +78,9 @@ unsigned char ardPwmPins[] = {3, 5, 11};                        // available ard
 unsigned char ardAnalogPins[] = {20, 21, 22, 23, 24, 25};             // A0,A1,A2,A3,A4,A5
 unsigned char ardServoPin = 6;                                  // available arduino servo pin
 
+// Create servo object to use servo
+Servo myservo;
+
 int ID = -1;      // ID number for command, see lookup table
 int loc = -1;     // location (pin) for command, see lookup table
 int sign = -1;    // sign of val, 1=positive and 0=negative
@@ -83,11 +91,11 @@ void setup()
 {
   Serial.begin(9600);   // Set up serial communication
 
-  // pin setup
-  pinMode(8, OUTPUT);
-  pinMode(9, OUTPUT);
-  pinMode(12, OUTPUT);
-  pinMode(13, OUTPUT);
+  for (unsigned int i = 0; i < sizeof(ardDioInPins); ++i) // Setup digital input pins
+    pinMode(ardDioInPins[i], INPUT);
+  for (unsigned int i = 0; i < sizeof(ardDioOutPins); ++i) // Setup digital output pins
+    pinMode(ardDioOutPins[i], OUTPUT);
+  myservo.attach(ardServoPin);                // Setup servo pin
 
   // Debugging
 
@@ -96,8 +104,8 @@ void setup()
 void loop()
 {
   serialReceive();      // fill in the buffer which holds the input characters if serial data is detected
-  separateCommand();    // Separate buffer into the ID,loc,val,ret. Each of these are integer numbers.
-  executeCommand();     // execute command based on the ID,loc,val,ret
+  separateCommand();    // Separate buffer into the ID,loc,sign,val,ret. Each of these are integer numbers.
+  executeCommand();     // execute command based on the ID,loc,sign,val,ret
 }
 
 void serialReceive()
@@ -191,11 +199,11 @@ void separateCommand()
     ret = atoi(tmpret);
 
     /* DEBUGGING */
-//    Serial.println(ID);
-//    Serial.println(loc);
-//    Serial.println(sign);
-//    Serial.println(val);
-//    Serial.println(ret);
+    //    Serial.println(ID);
+    //    Serial.println(loc);
+    //    Serial.println(sign);
+    //    Serial.println(val);
+    //    Serial.println(ret);
 
     newDataIsAvailable = false;
 
@@ -207,42 +215,42 @@ void separateCommand()
 
 void executeCommand()
 {
-  // update value based on sign is 0
+  // update value to be negative if sign is 0
   if (sign == 0) val *= -1;
 
   // Identify which command we want to execute
   // If command not identified, it is ignored with the default case
-  // Execute command if pin is correct and we're ready to execute
+  // Execute command if pin is correct and if we're ready to execute
   if (readyToExecuteCmd)
   {
     switch (ID)
     {
       case cmd_digitalWrite:
-        pin_type = DO;
+        pin_type = DOut;
         if (is_pin_valid(pin_type, loc))
           exec_digitalWrite(loc, val);
         break;
 
       case cmd_digitalRead:
-        pin_type = DI;
+        pin_type = DIn;
         if (is_pin_valid(pin_type, loc))
-          digitalRead(loc);
+          exec_digitalRead(loc);
         break;
 
       case cmd_getPinMode:
-        getDioMode(pin_type, loc);
+        getDioMode(loc);
         break;
 
       case cmd_analogRead:
-        pin_type = AI;
+        pin_type = AIn;
         if (is_pin_valid(pin_type, loc))
           exec_analogRead(loc);
         break;
 
       case cmd_pwmWrite:
-        pin_type = AO;
+        pin_type = AOut;
         if (is_pin_valid(pin_type, loc))
-          analogWrite(loc, val);
+          exec_pwm(loc, val);
         break;
 
       default:
@@ -250,12 +258,9 @@ void executeCommand()
     }
   }
 
-  if (ret==ret_cmd_complete_ping)
+  if (ret == ret_cmd_complete_ping)
   {
-    // delay a bit so simulink has a chance to catch the ping
-    delay(1);
-    
-    // RETURN ID ID loc loc sign 8888 9
+    // RETURN ping 
     returnCmdFinishedPing();
   }
 
@@ -268,28 +273,28 @@ bool is_pin_valid(int pinType, int pin)
   unsigned int i;
 
   // check if pin matches one of the digital input pins
-  if (pinType == DI)
+  if (pinType == DIn)
   {
     for (i = 0 ; i < sizeof(ardDioInPins) ; ++i)
       if (pin == ardDioInPins[i]) valid_pin = true;
   }
 
   // check if pin matches one of these digital output pins
-  else if (pinType == DO)
+  else if (pinType == DOut)
   {
     for (i = 0 ; i < sizeof(ardDioOutPins) ; ++i)
       if (pin == ardDioOutPins[i]) valid_pin = true;
   }
 
   // check if pin matches one of these pwm output pins
-  else if (pinType == AO)
+  else if (pinType == AOut)
   {
     for (i = 0 ; i < sizeof(ardPwmPins) ; ++i)
       if (pin == ardPwmPins[i]) valid_pin = true;
   }
 
   // check if pin matches one of these analog input pins
-  else if (pinType == AI)
+  else if (pinType == AIn)
   {
     for (i = 0 ; i < sizeof(ardAnalogPins) ; ++i)
       if (pin == ardAnalogPins[i]) valid_pin = true;
@@ -305,14 +310,29 @@ void exec_digitalWrite(int pin, int value) {
 }
 
 void exec_digitalRead(int pin) {
-  Serial.println(digitalRead(pin));
+  char digitalvalHIGH[] = "0001";
+  char digitalvalLOW[] = "0000";
+  if (digitalRead(pin))
+    returnVal(digitalvalHIGH);
+  else
+    returnVal(digitalvalLOW);
 }
 
-void getDioMode(int pinType, int pin) {
-  if(pinType==DI || pinType==AI) Serial.println("INPUT");
-  else if(pinType==DO) Serial.println("OUTPUT");
-  else if(pinType==AO) Serial.println("PWM OUTPUT");
-  else if(pinType==AO && pin==ardServoPin) Serial.println("Servo PWM OUTPUT");
+void getDioMode(int pin) {
+
+  char pINPUT[] = "0000";
+  char pOUTPUT[] = "0001";
+  char pANALOGINPUT[] = "0002";
+  char pPWMOUTPUT[] = "0003";
+  char pSERVOOUTPUT[] = "0004";
+  char pInvalid[] = "0005";
+
+  if (is_pin_valid(DIn, pin)) returnVal(pINPUT);             // pin is digital input
+  else if (is_pin_valid(DOut, pin)) returnVal(pOUTPUT);       // pin is digital output
+  else if (is_pin_valid(AIn, pin)) returnVal(pANALOGINPUT);  // pin is Analog input
+  else if (is_pin_valid(AOut, pin)) returnVal(pPWMOUTPUT);   // pin is PWM output
+  else if (pin == ardServoPin) returnVal(pSERVOOUTPUT);     // pin is servo PWM output
+  else returnVal(pInvalid); // pin is invalid
 }
 
 void exec_analogRead(int pin) {
@@ -350,11 +370,23 @@ void exec_pwm(int pin, int value) {
 
 void returnCmdFinishedPing()
 {
+  // delay a bit so simulink has a chance to catch the ping
+  delay(1);
+
+  char ping[] = "8888";
+  returnVal(ping);
+
+  // reset ret so it doesn't spam the ping after being sent once
+  ret = -1;
+}
+
+void returnVal(char val[])
+{
   Serial.print(ID);
 
   // Check if loc starts with 0, ex. 08
   // if it is then add a zero
-  if(loc < 10)
+  if (loc < 10)
   {
     Serial.print(0);
     Serial.print(loc);
@@ -363,11 +395,7 @@ void returnCmdFinishedPing()
   {
     Serial.print(loc);
   }
-  
   Serial.print(sign);
-  Serial.print(8888);
+  Serial.print(val);
   Serial.println(ret);
-
-  // reset ret so it doesn't spam the ping after being sent once
-  ret = -1;
 }
