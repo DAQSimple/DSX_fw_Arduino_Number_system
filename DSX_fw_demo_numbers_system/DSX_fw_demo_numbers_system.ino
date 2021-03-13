@@ -34,7 +34,7 @@
 #define val_Length  4
 #define ret_Length  1
 
-#define ret_cmd_complete_pin  9
+#define ret_cmd_complete_ping 9
 
 #define cmd_digitalWrite      10
 #define cmd_digitalRead       11
@@ -250,8 +250,11 @@ void executeCommand()
     }
   }
 
-  if (ret==ret_cmd_complete_pin)
+  if (ret==ret_cmd_complete_ping)
   {
+    // delay a bit so simulink has a chance to catch the ping
+    delay(1);
+    
     // RETURN ID ID loc loc sign 8888 9
     returnCmdFinishedPing();
   }
