@@ -22,6 +22,8 @@
 #include <Servo.h>
 
 
+#define ENC_COUNT_REV 48
+
 #define ID_START    0
 #define ID_END      1
 #define loc_START   2
@@ -53,6 +55,16 @@
 #define cmd_getSerialInfo     19
 #define cmd_getSysStatus      20
 
+/**** Macros for changing the PWM Frequency ****/
+#define CLEAR_LAST3_LSB   B11111000
+#define FREQ_32KHZ        B00000001
+#define FREQ_4KHZ         B00000010
+#define FREQ_980HZ        B00000011
+#define FREQ_490HZ        B00000100 // default
+#define FREQ_245HZ        B00000101
+#define FREQ_122HZ        B00000110
+#define FREQ_30HZ         B00000111
+
 // ****** Variables ******
 const int numChar = 10;             // number of characters we want.
 char Buffer[numChar];               // Buffer to hold characters or number commands.
@@ -60,6 +72,15 @@ char endMarker = '\n';              // Our personal endMarker or terminating cha
 bool newDataIsAvailable = false;    // bool variable so we know if new data is available to start executing commands.
 bool readyToExecuteCmd = false;     // bool variable so we know if we can start executing a command
 int pin_type;                       // holds the pin type such as digital input, digital output, etc.
+
+volatile long encoderValue = 0;
+int interval = 1000;    // One-second interval for measurements
+long previousMillis = 0;  // Counter for milliseconds during interval
+long currentMillis = 0;   // Counter for milliseconds during interval
+int rpm = 0;  // will hold speed from encoder in rpm
+bool CW = 1;
+bool CCW = 0;
+bool direction;   // to store direction 1: clockwise, 0: counter clockwise
 
 typedef enum
 {
@@ -97,6 +118,8 @@ void setup()
     pinMode(ardDioOutPins[i], OUTPUT);
   myservo.attach(ardServoPin);                // Setup servo pin
 
+  initEncoder();
+
   // Debugging
 
 }
@@ -106,6 +129,7 @@ void loop()
   serialReceive();      // fill in the buffer which holds the input characters if serial data is detected
   separateCommand();    // Separate buffer into the ID,loc,sign,val,ret. Each of these are integer numbers.
   executeCommand();     // execute command based on the ID,loc,sign,val,ret
+  updateEncoderReadings();  // Update encoder readings
 }
 
 void serialReceive()
@@ -253,6 +277,20 @@ void executeCommand()
           exec_pwm(loc, val);
         break;
 
+      case cmd_setPWMFreq:
+        exec_setPWMFreq(loc, val);
+        break;
+
+      case cmd_servo:
+        exec_servoWrite(loc, val);
+        break;
+
+      case cmd_getEncoderSpeed:
+        pin_type = DIn;
+        if (is_pin_valid(pin_type, loc))
+          readEncoder();
+        break;
+
       default:
         break;
     }
@@ -260,7 +298,7 @@ void executeCommand()
 
   if (ret == ret_cmd_complete_ping)
   {
-    // RETURN ping 
+    // RETURN ping
     returnCmdFinishedPing();
   }
 
@@ -336,29 +374,37 @@ void getDioMode(int pin) {
 }
 
 void exec_analogRead(int pin) {
+  unsigned int analogReading=0;
+  
+  // Return type
+  ret = 3;  
+  
   switch (pin)
   {
     case 20:
-      Serial.println(analogRead(A0));
+      analogReading = analogRead(A0);
       break;
     case 21:
-      Serial.println(analogRead(A1));
+      analogReading = analogRead(A1);
       break;
     case 22:
-      Serial.println(analogRead(A2));
+      analogReading = analogRead(A2);
       break;
     case 23:
-      Serial.println(analogRead(A3));
+      analogReading = analogRead(A3);
       break;
     case 24:
-      Serial.println(analogRead(A4));
+      analogReading = analogRead(A4);
       break;
     case 25:
-      Serial.println(analogRead(A5));
+      analogReading = analogRead(A5);
       break;
     default:
       break;
   }
+
+  // send back results to simulink
+  returnValnum(analogReading);
 }
 
 void exec_pwm(int pin, int value) {
@@ -366,6 +412,48 @@ void exec_pwm(int pin, int value) {
   if (value > 100) value = 100;
   value = map(value, 0, 100, 0, 255);
   analogWrite(pin, value);
+}
+
+void exec_setPWMFreq(int pin, int value) {
+  if (pin == 3 || pin == 11) {
+    // set pin 3 and pin 11 pwm to the desired frequency
+    switch (value) {
+      case 30:
+        TCCR2B = (TCCR2B & CLEAR_LAST3_LSB) | FREQ_30HZ;
+        break;
+      case 122:
+        TCCR2B = (TCCR2B & CLEAR_LAST3_LSB) | FREQ_122HZ;
+        break;
+      case 245:
+        TCCR2B = (TCCR2B & CLEAR_LAST3_LSB) | FREQ_245HZ;
+        break;
+      case 490:
+        TCCR2B = (TCCR2B & CLEAR_LAST3_LSB) | FREQ_490HZ;
+        break;
+      case 980:
+        TCCR2B = (TCCR2B & CLEAR_LAST3_LSB) | FREQ_980HZ;
+        break;
+      case 4000:
+        TCCR2B = (TCCR2B & CLEAR_LAST3_LSB) | FREQ_4KHZ;
+        break;
+      case 3200:
+        TCCR2B = (TCCR2B & CLEAR_LAST3_LSB) | FREQ_32KHZ;
+        break;
+      default:
+        break;
+    }
+  }
+}
+
+void exec_servoWrite(int pin, int value)
+{
+  if (sign == 1)
+  {
+    if (value < 0) value = 0;
+    else if (value > 180) value = 180;
+    if (pin == ardServoPin)
+      myservo.write(value);
+  }
 }
 
 void returnCmdFinishedPing()
@@ -398,4 +486,71 @@ void returnVal(char val[])
   Serial.print(sign);
   Serial.print(val);
   Serial.println(ret);
+}
+
+void returnValnum(int val)
+{
+  Serial.print(ID);
+
+  // Check if loc starts with 0, ex. 08
+  // if it is then add a zero
+  if (loc < 10)
+  {
+    Serial.print(0);
+    Serial.print(loc);
+  }
+  else
+  {
+    Serial.print(loc);
+  }
+  Serial.print(sign);
+
+  // Add extra zeros if val is less than 1000
+  if (val < 1000 && val >= 100) Serial.print("0");
+  else if (val < 100 && val >= 10) Serial.print("00");
+  else if (val < 10) Serial.print("000");
+
+  Serial.print(val);
+  Serial.println(ret);
+}
+
+void readEncoder()
+{
+  sign = direction;   // sign to represent CW or CCW
+  returnValnum(rpm);
+}
+
+void initEncoder() {
+  // initialize interrupt pins 2 for reading encoder
+  pinMode(encoderChA, INPUT_PULLUP);
+  pinMode(encoderChB, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(encoderChA), updateEncoder, RISING);
+
+  // Setup initial values for timer
+  previousMillis = millis();
+}
+
+void updateEncoderReadings()
+{
+  currentMillis = millis();
+  if (currentMillis - previousMillis > interval) {
+    previousMillis = currentMillis;
+
+    // Calculate RPM
+    rpm = (float)(encoderValue * 60 / ENC_COUNT_REV);
+
+    encoderValue = 0;
+  }
+}
+
+void updateEncoder()
+{
+  // Increment value for each pulse from encoder
+  encoderValue++;
+
+  // check if going CW or CCW
+  if (digitalRead(encoderChB))
+    direction = CW;
+  else
+    direction = CCW;
 }
