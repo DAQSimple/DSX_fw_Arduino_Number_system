@@ -50,10 +50,9 @@
 #define cmd_pwmWrite          14
 #define cmd_setPWMFreq        15
 #define cmd_servo             16
-#define cmd_getEncoderSpeed   17
-#define cmd_getEncoderDir     18
-#define cmd_getSerialInfo     19
-#define cmd_getSysStatus      20
+#define cmd_getEncoderInfo    17
+#define cmd_getSerialInfo     18
+#define cmd_getSysStatus      19
 
 /**** Macros for changing the PWM Frequency ****/
 #define CLEAR_LAST3_LSB   B11111000
@@ -72,6 +71,7 @@ char endMarker = '\n';              // Our personal endMarker or terminating cha
 bool newDataIsAvailable = false;    // bool variable so we know if new data is available to start executing commands.
 bool readyToExecuteCmd = false;     // bool variable so we know if we can start executing a command
 int pin_type;                       // holds the pin type such as digital input, digital output, etc.
+int SERIAL_CONFIG = SERIAL_8N1;     // holds data,parity, and stop bit config
 
 volatile long encoderValue = 0;
 int interval = 1000;    // One-second interval for measurements
@@ -110,14 +110,8 @@ int ret = -1;     // return type, see lookup table
 
 void setup()
 {
-  Serial.begin(9600);   // Set up serial communication
-
-  for (unsigned int i = 0; i < sizeof(ardDioInPins); ++i) // Setup digital input pins
-    pinMode(ardDioInPins[i], INPUT);
-  for (unsigned int i = 0; i < sizeof(ardDioOutPins); ++i) // Setup digital output pins
-    pinMode(ardDioOutPins[i], OUTPUT);
-  myservo.attach(ardServoPin);                // Setup servo pin
-
+  Serial.begin(9600, SERIAL_CONFIG );   // Set up serial communication
+  initPins();
   initEncoder();
 
   // Debugging
@@ -285,10 +279,14 @@ void executeCommand()
         exec_servoWrite(loc, val);
         break;
 
-      case cmd_getEncoderSpeed:
+      case cmd_getEncoderInfo:
         pin_type = DIn;
         if (is_pin_valid(pin_type, loc))
           readEncoder();
+        break;
+
+      case cmd_getSerialInfo:
+        getSerial();
         break;
 
       default:
@@ -374,11 +372,11 @@ void getDioMode(int pin) {
 }
 
 void exec_analogRead(int pin) {
-  unsigned int analogReading=0;
-  
+  unsigned int analogReading = 0;
+
   // Return type
-  ret = 3;  
-  
+  ret = 3;
+
   switch (pin)
   {
     case 20:
@@ -462,7 +460,7 @@ void returnCmdFinishedPing()
   delay(1);
 
   char ping[] = "8888";
-  returnVal(ping);
+  returnVal(G);
 
   // reset ret so it doesn't spam the ping after being sent once
   ret = -1;
@@ -553,4 +551,97 @@ void updateEncoder()
     direction = CW;
   else
     direction = CCW;
+}
+
+void getSerial()
+{
+  ret = 5;  // Serial Info
+  
+  switch (SERIAL_CONFIG)
+  {
+    case SERIAL_5N1:
+    returnVal("0501");
+      break;
+    case SERIAL_6N1:
+    returnVal("0601");
+      break;
+    case SERIAL_7N1:
+    returnVal("0701");
+      break;
+    case SERIAL_8N1:
+    returnVal("0801");
+      break;
+    case SERIAL_5N2:
+    returnVal("0502");
+      break;
+    case SERIAL_6N2:
+    returnVal("0602");
+      break;
+    case SERIAL_7N2:
+    returnVal("0702");
+      break;
+    case SERIAL_8N2:
+    returnVal("0802");
+      break;
+    case SERIAL_5E1:
+    returnVal("0511");
+      break;  
+    case SERIAL_6E1:
+    returnVal("0611");
+      break;
+    case SERIAL_7E1:
+    returnVal("0711");
+      break;
+    case SERIAL_8E1:
+    returnVal("0811");
+      break;
+    case SERIAL_5E2:
+    returnVal("0512");
+      break;
+    case SERIAL_6E2:
+    returnVal("0612");
+      break;
+    case SERIAL_7E2:
+    returnVal("0712");
+      break;
+    case SERIAL_8E2:
+    returnVal("0812");
+      break;
+    case SERIAL_5O1:
+    returnVal("0521");
+      break;
+    case SERIAL_6O1:
+    returnVal("0621");
+      break;
+    case SERIAL_7O1:
+    returnVal("0721");
+      break;
+    case SERIAL_8O1:
+    returnVal("0821");
+      break;
+    case SERIAL_5O2:
+    returnVal("0522");
+      break;
+    case SERIAL_6O2:
+    returnVal("0622");
+      break;
+    case SERIAL_7O2:
+    returnVal("0722");
+      break;
+    case SERIAL_8O2:
+    returnVal("0822");
+      break;
+    default:
+      break;
+  }
+
+}
+
+void initPins()
+{
+  for (unsigned int i = 0; i < sizeof(ardDioInPins); ++i) // Setup digital input pins
+    pinMode(ardDioInPins[i], INPUT);
+  for (unsigned int i = 0; i < sizeof(ardDioOutPins); ++i) // Setup digital output pins
+    pinMode(ardDioOutPins[i], OUTPUT);
+  myservo.attach(ardServoPin);                // Setup servo pin  
 }
