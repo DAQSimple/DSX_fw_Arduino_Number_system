@@ -74,10 +74,10 @@ int pin_type;                       // holds the pin type such as digital input,
 int SERIAL_CONFIG = SERIAL_8N1;     // holds data,parity, and stop bit config
 
 volatile long encoderValue = 0;
-int interval = 1000;    // One-second interval for measurements
+int interval = 1000;      // One-second interval for measurements
 long previousMillis = 0;  // Counter for milliseconds during interval
 long currentMillis = 0;   // Counter for milliseconds during interval
-int rpm = 0;  // will hold speed from encoder in rpm
+int rpm = 0;              // will hold speed from encoder in rpm
 bool CW = 1;
 bool CCW = 0;
 bool direction;   // to store direction 1: clockwise, 0: counter clockwise
@@ -96,7 +96,7 @@ unsigned char ardDioInPins[] = {encoderChA, encoderChB, 7, 10}; // available ard
 unsigned char ardDioOutPins[] = {8, 9, 12, 13};                 // available arduino OUTPUT digital pins
 unsigned char ardPwmPins[] = {3, 5, 11};                        // available arduino pwm pins
 // PWM pins 3 and 11 can configure their frequency
-unsigned char ardAnalogPins[] = {20, 21, 22, 23, 24, 25};             // A0,A1,A2,A3,A4,A5
+unsigned char ardAnalogPins[] = {20, 21, 22, 23, 24, 25};       // A0,A1,A2,A3,A4,A5
 unsigned char ardServoPin = 6;                                  // available arduino servo pin
 
 // Create servo object to use servo
@@ -120,9 +120,9 @@ void setup()
 
 void loop()
 {
-  serialReceive();      // fill in the buffer which holds the input characters if serial data is detected
-  separateCommand();    // Separate buffer into the ID,loc,sign,val,ret. Each of these are integer numbers.
-  executeCommand();     // execute command based on the ID,loc,sign,val,ret
+  serialReceive();          // fill in the buffer which holds the input characters if serial data is detected
+  separateCommand();        // Separate buffer into the ID,loc,sign,val,ret. Each of these are integer numbers.
+  executeCommand();         // execute command based on the ID,loc,sign,val,ret
   updateEncoderReadings();  // Update encoder readings
 }
 
@@ -348,6 +348,7 @@ void exec_digitalWrite(int pin, int value) {
 void exec_digitalRead(int pin) {
   char digitalvalHIGH[] = "0001";
   char digitalvalLOW[] = "0000";
+  ret = 1;
   if (digitalRead(pin))
     returnVal(digitalvalHIGH);
   else
@@ -460,7 +461,7 @@ void returnCmdFinishedPing()
   delay(1);
 
   char ping[] = "8888";
-  returnVal(G);
+  returnVal(ping);
 
   // reset ret so it doesn't spam the ping after being sent once
   ret = -1;
