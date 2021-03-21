@@ -20,7 +20,7 @@
 
 
 #include <Servo.h>
-
+#include <SPI.h>
 
 #define ENC_COUNT_REV 48
 
@@ -53,6 +53,7 @@
 #define cmd_getEncoderInfo    17
 #define cmd_getSerialInfo     18
 #define cmd_getSysStatus      19
+#define cmd_dacWrite          20
 
 /**** Macros for changing the PWM Frequency ****/
 #define CLEAR_LAST3_LSB   B11111000
@@ -93,8 +94,9 @@ typedef enum
 unsigned char encoderChA = 2;       // encoder pin channel A
 unsigned char encoderChB = 4;       // encoder pin channel B
 unsigned char ardDioInPins[] = {encoderChA, encoderChB, 7, 10}; // available arduino INPUT digital pins
-unsigned char ardDioOutPins[] = {8, 9, 12, 13};                 // available arduino OUTPUT digital pins
-unsigned char ardPwmPins[] = {3, 5, 11};                        // available arduino pwm pins
+unsigned char slaveSelectPin = 8;
+unsigned char ardDioOutPins[] = {9, slaveSelectPin, 12};    // available arduino OUTPUT digital pins
+unsigned char ardPwmPins[] = {3, 5};                        // available arduino pwm pins
 // PWM pins 3 and 11 can configure their frequency
 unsigned char ardAnalogPins[] = {20, 21, 22, 23, 24, 25};       // A0,A1,A2,A3,A4,A5
 unsigned char ardServoPin = 6;                                  // available arduino servo pin
@@ -113,6 +115,8 @@ void setup()
   Serial.begin(9600, SERIAL_CONFIG );   // Set up serial communication
   initPins();
   initEncoder();
+  initSpi();
+
 
   // Debugging
 
@@ -289,6 +293,10 @@ void executeCommand()
         getSerial();
         break;
 
+      case cmd_dacWrite:
+        dacWrite(val);
+        break;
+
       default:
         break;
     }
@@ -362,13 +370,20 @@ void getDioMode(int pin) {
   char pANALOGINPUT[] = "0002";
   char pPWMOUTPUT[] = "0003";
   char pSERVOOUTPUT[] = "0004";
-  char pInvalid[] = "0005";
+  char sckPin[] = "0005";
+  char mosiPin[] = "0006";
+  char pInvalid[] = "0007";
+
+  // set  return type 
+  ret = 2;
 
   if (is_pin_valid(DIn, pin)) returnVal(pINPUT);             // pin is digital input
   else if (is_pin_valid(DOut, pin)) returnVal(pOUTPUT);       // pin is digital output
   else if (is_pin_valid(AIn, pin)) returnVal(pANALOGINPUT);  // pin is Analog input
   else if (is_pin_valid(AOut, pin)) returnVal(pPWMOUTPUT);   // pin is PWM output
   else if (pin == ardServoPin) returnVal(pSERVOOUTPUT);     // pin is servo PWM output
+  else if (pin == 13) returnVal(sckPin);                    // pin is serial clock output
+  else if (pin == 11) returnVal(mosiPin);                   // pin is MOSI output
   else returnVal(pInvalid); // pin is invalid
 }
 
@@ -509,7 +524,11 @@ void returnValnum(int val)
   else if (val < 100 && val >= 10) Serial.print("00");
   else if (val < 10) Serial.print("000");
 
-  Serial.print(val);
+  // Saturate val to 9999 or 0
+  if (val > 9999) Serial.print("9999");
+  else if (val < 0) Serial.print("0000");
+  else Serial.print(val);
+
   Serial.println(ret);
 }
 
@@ -557,80 +576,80 @@ void updateEncoder()
 void getSerial()
 {
   ret = 5;  // Serial Info
-  
+
   switch (SERIAL_CONFIG)
   {
     case SERIAL_5N1:
-    returnVal("0501");
+      returnVal("0501");
       break;
     case SERIAL_6N1:
-    returnVal("0601");
+      returnVal("0601");
       break;
     case SERIAL_7N1:
-    returnVal("0701");
+      returnVal("0701");
       break;
     case SERIAL_8N1:
-    returnVal("0801");
+      returnVal("0801");
       break;
     case SERIAL_5N2:
-    returnVal("0502");
+      returnVal("0502");
       break;
     case SERIAL_6N2:
-    returnVal("0602");
+      returnVal("0602");
       break;
     case SERIAL_7N2:
-    returnVal("0702");
+      returnVal("0702");
       break;
     case SERIAL_8N2:
-    returnVal("0802");
+      returnVal("0802");
       break;
     case SERIAL_5E1:
-    returnVal("0511");
-      break;  
+      returnVal("0511");
+      break;
     case SERIAL_6E1:
-    returnVal("0611");
+      returnVal("0611");
       break;
     case SERIAL_7E1:
-    returnVal("0711");
+      returnVal("0711");
       break;
     case SERIAL_8E1:
-    returnVal("0811");
+      returnVal("0811");
       break;
     case SERIAL_5E2:
-    returnVal("0512");
+      returnVal("0512");
       break;
     case SERIAL_6E2:
-    returnVal("0612");
+      returnVal("0612");
       break;
     case SERIAL_7E2:
-    returnVal("0712");
+      returnVal("0712");
       break;
     case SERIAL_8E2:
-    returnVal("0812");
+      returnVal("0812");
       break;
     case SERIAL_5O1:
-    returnVal("0521");
+      returnVal("0521");
       break;
     case SERIAL_6O1:
-    returnVal("0621");
+      returnVal("0621");
       break;
     case SERIAL_7O1:
-    returnVal("0721");
+      returnVal("0721");
       break;
     case SERIAL_8O1:
-    returnVal("0821");
+      returnVal("0821");
       break;
     case SERIAL_5O2:
-    returnVal("0522");
+      returnVal("0522");
       break;
     case SERIAL_6O2:
-    returnVal("0622");
+      returnVal("0622");
       break;
     case SERIAL_7O2:
-    returnVal("0722");
+      returnVal("0722");
       break;
     case SERIAL_8O2:
-    returnVal("0822");
+      returnVal("0822");
       break;
     default:
       break;
@@ -644,5 +663,35 @@ void initPins()
     pinMode(ardDioInPins[i], INPUT);
   for (unsigned int i = 0; i < sizeof(ardDioOutPins); ++i) // Setup digital output pins
     pinMode(ardDioOutPins[i], OUTPUT);
-  myservo.attach(ardServoPin);                // Setup servo pin  
+  myservo.attach(ardServoPin);                // Setup servo pin
+}
+
+void initSpi()
+{
+  SPI.beginTransaction(SPISettings(20000000, MSBFIRST, SPI_MODE0));
+  SPI.begin();
+}
+
+void dacWrite(unsigned long val)
+{
+  // If we get a value past the maximum value allowed
+  if(val>1023)val=1023;
+  
+  // Map 0 - 4095 to 000 to FFF
+  val = map(val, 0, 1023, 0x0000, 0x03FF);
+
+  // Shift two bits left cuz we using a 10 bit DAC
+  // Refer to write register in the datasheet
+  val = (val << 2);
+
+  unsigned long base = 0x1000;
+
+  if (sign == 1)
+  {
+    val = base | val;
+
+    digitalWrite(slaveSelectPin, LOW);
+    SPI.transfer16(val);
+    digitalWrite(slaveSelectPin, HIGH);
+  }
 }
