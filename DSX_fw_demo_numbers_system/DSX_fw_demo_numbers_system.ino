@@ -429,7 +429,7 @@ void exec_pwm(int pin, int value) {
 }
 
 void exec_setPWMFreq(int pin, int value) {
-  if (pin == 3 || pin == 11) {
+  if (pin == 3) {
     // set pin 3 and pin 11 pwm to the desired frequency
     switch (value) {
       case 30:
